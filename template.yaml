@@ -1,6 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'IAM Lab 2 - Users, Groups and Secrets Manager'
 
+
 Resources:
 
   # ============================================================
