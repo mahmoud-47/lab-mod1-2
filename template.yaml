@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IAM Lab 2 - Users, Groups and Secrets Manager'
+
+Resources:
+
+  # ============================================================
+  # SECRETS MANAGER - Auto-generated shared password
+  # ============================================================
+  IAMUserSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: IAMLab2SharedPassword
+      Description: Shared temporary password for IAM lab users
+      GenerateSecretString:
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+
+  # ============================================================
+  # IAM POLICIES
+  # ============================================================
+
+  # S3 Policy - list buckets only
+  S3ListPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: S3ListBucketsPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListAllMyBuckets
+            Resource: '*'
+
+  # EC2 Policy - list instances + create instances
+  EC2Policy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: EC2ListAndCreatePolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ec2:DescribeInstances
+              - ec2:RunInstances
+            Resource: '*'
+
+  # Deny policy for ec2-user2 (cannot create EC2 instances)
+  EC2User2DenyCreatePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: DenyEC2CreatePolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Action:
+              - ec2:RunInstances
+            Resource: '*'
+
+  # ============================================================
+  # IAM GROUPS
+  # ============================================================
+
+  # S3 Group - can list S3 buckets
+  S3UserGroup:
+    Type: AWS::IAM::Group
+    DependsOn: S3ListPolicy
+    Properties:
+      GroupName: S3UserGroup
+      ManagedPolicyArns:
+        - !Ref S3ListPolicy
+        - arn:aws:iam::aws:policy/IAMUserChangePassword
+
+  # EC2 Group - can list AND create EC2 instances
+  EC2UserGroup:
+    Type: AWS::IAM::Group
+    DependsOn: EC2Policy
+    Properties:
+      GroupName: EC2UserGroup
+      ManagedPolicyArns:
+        - !Ref EC2Policy
+        - arn:aws:iam::aws:policy/IAMUserChangePassword
+
+  # ============================================================
+  # IAM USERS
+  # ============================================================
+
+  # s3-user: assigned to S3 Group
+  S3User:
+    Type: AWS::IAM::User
+    DependsOn: IAMUserSecret
+    Properties:
+      UserName: s3-user
+      Groups:
+        - !Ref S3UserGroup
+      LoginProfile:
+        Password: !Sub '{{resolve:secretsmanager:IAMLab2SharedPassword:SecretString}}'
+        PasswordResetRequired: true
+
+  # ec2-user1: assigned to EC2 Group (can list and create EC2 instances)
+  EC2User1:
+    Type: AWS::IAM::User
+    DependsOn: IAMUserSecret
+    Properties:
+      UserName: ec2-user1
+      Groups:
+        - !Ref EC2UserGroup
+      LoginProfile:
+        Password: !Sub '{{resolve:secretsmanager:IAMLab2SharedPassword:SecretString}}'
+        PasswordResetRequired: true
+
+  # ec2-user2: assigned to EC2 Group BUT explicitly denied RunInstances
+  EC2User2:
+    Type: AWS::IAM::User
+    DependsOn: IAMUserSecret
+    Properties:
+      UserName: ec2-user2
+      Groups:
+        - !Ref EC2UserGroup
+      ManagedPolicyArns:                  
+        - !Ref EC2User2DenyCreatePolicy
+      LoginProfile:
+        Password: !Sub '{{resolve:secretsmanager:IAMLab2SharedPassword:SecretString}}'
+        PasswordResetRequired: true
+
+Outputs:
+  SecretArn:
+    Description: ARN of the shared password secret
+    Value: !Ref IAMUserSecret
+
+  S3GroupArn:
+    Description: ARN of S3 User Group
+    Value: !GetAtt S3UserGroup.Arn
+
+  EC2GroupArn:
+    Description: ARN of EC2 User Group
+    Value: !GetAtt EC2UserGroup.Arn
