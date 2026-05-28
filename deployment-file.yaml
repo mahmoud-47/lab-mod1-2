@@ -1,4 +1,3 @@
-template-file-path: ./template.yaml
+template-file-path: template.yaml
 parameters: {}
-tags:
-  Lab: IAM-Lab-2
+tags: {}
