@@ -100,16 +100,16 @@ Resources:
   # ============================================================
 
   # s3-user: assigned to S3 Group
-  S3User:
-    Type: AWS::IAM::User
-    DependsOn: IAMUserSecret
-    Properties:
-      UserName: s3-user
-      Groups:
-        - !Ref S3UserGroup
-      LoginProfile:
-        Password: !Sub '{{resolve:secretsmanager:IAMLab2SharedPassword:SecretString}}'
-        PasswordResetRequired: true
+  # S3User:
+  #   Type: AWS::IAM::User
+  #   DependsOn: IAMUserSecret
+  #   Properties:
+  #     UserName: s3-user
+  #     Groups:
+  #       - !Ref S3UserGroup
+  #     LoginProfile:
+  #       Password: !Sub '{{resolve:secretsmanager:IAMLab2SharedPassword:SecretString}}'
+  #       PasswordResetRequired: true
 
   # ec2-user1: assigned to EC2 Group (can list and create EC2 instances)
   EC2User1:
