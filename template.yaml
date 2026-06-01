@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'IAM Lab 2 - Users, Groups and Secrets Manager'
+Description: 'IAM Lab 2 - Users, Groups and Secrets Manager (ec2-user2 capped via Permissions Boundary)'
 
 
 Resources:
@@ -58,17 +58,53 @@ Resources:
               - ec2:CreateTags
             Resource: '*'
 
-  # Deny policy for ec2-user2 (cannot create EC2 instances)
-  EC2User2DenyCreatePolicy:
+  # ------------------------------------------------------------
+  # PERMISSIONS BOUNDARY for ec2-user2
+  # ------------------------------------------------------------
+  # This does NOT grant anything on its own. It sets the CEILING
+  # of what ec2-user2 can ever do. A user's effective permissions
+  # are the INTERSECTION of their identity policies (here: inherited
+  # from EC2UserGroup) and this boundary.
+  #
+  # Note that ec2:RunInstances is deliberately absent from the
+  # allow list below. The group grants it, but the boundary does
+  # not, so the intersection removes it -> ec2-user2 cannot launch
+  # instances. No explicit Deny needed; the cap does the work.
+  #
+  # iam:ChangePassword + iam:GetAccountPasswordPolicy are re-granted
+  # here on purpose: the boundary caps EVERYTHING, so without them
+  # the forced first-login password reset would be blocked.
+  # ------------------------------------------------------------
+  EC2User2Boundary:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: DenyEC2CreatePolicy
+      ManagedPolicyName: EC2User2PermissionsBoundary
+      Description: >-
+        Maximum-permissions ceiling for ec2-user2. Allows the same EC2
+        actions as the group EXCEPT ec2:RunInstances, plus self password change.
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Effect: Deny
+          - Sid: AllowEC2ExceptRunInstances
+            Effect: Allow
             Action:
-              - ec2:RunInstances
+              - ec2:DescribeInstances
+              - ec2:DescribeInstanceTypes
+              - ec2:DescribeImages
+              - ec2:DescribeKeyPairs
+              - ec2:CreateSecurityGroup
+              - ec2:DescribeSecurityGroups
+              - ec2:DescribeSubnets
+              - ec2:DescribeVpcs
+              - ec2:StartInstances
+              - ec2:StopInstances
+              - ec2:CreateTags
+            Resource: '*'
+          - Sid: AllowSelfPasswordChange
+            Effect: Allow
+            Action:
+              - iam:ChangePassword
+              - iam:GetAccountPasswordPolicy
             Resource: '*'
 
   # ============================================================
@@ -123,7 +159,9 @@ Resources:
         Password: !Sub '{{resolve:secretsmanager:IAMLab2SharedPassword:SecretString}}'
         PasswordResetRequired: true
 
-  # ec2-user2: assigned to EC2 Group BUT explicitly denied RunInstances
+  # ec2-user2: same EC2 Group as ec2-user1, but a permissions boundary
+  # caps what the group grants. RunInstances is not in the boundary,
+  # so it gets stripped from the effective permission set.
   EC2User2:
     Type: AWS::IAM::User
     DependsOn: IAMUserSecret
@@ -131,8 +169,7 @@ Resources:
       UserName: ec2-user2
       Groups:
         - !Ref EC2UserGroup
-      ManagedPolicyArns:                  
-        - !Ref EC2User2DenyCreatePolicy
+      PermissionsBoundary: !Ref EC2User2Boundary   # <-- the ceiling
       LoginProfile:
         Password: !Sub '{{resolve:secretsmanager:IAMLab2SharedPassword:SecretString}}'
         PasswordResetRequired: true
@@ -149,3 +186,7 @@ Outputs:
   EC2GroupArn:
     Description: ARN of EC2 User Group
     Value: !GetAtt EC2UserGroup.Arn
+
+  EC2User2BoundaryArn:
+    Description: ARN of the permissions boundary capping ec2-user2
+    Value: !Ref EC2User2Boundary
